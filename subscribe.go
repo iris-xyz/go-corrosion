@@ -351,7 +351,7 @@ func (c *APIClient) postSubscription(ctx context.Context, query string, args []a
 
 	id := resp.Header.Get("corro-query-id")
 	if id == "" {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, errors.New("missing corro-query-id header in response")
 	}
 

@@ -1,0 +1,19 @@
+version: "2"
+
+linters:
+  default: standard
+  settings:
+    staticcheck:
+      # Disable QF* style/refactoring suggestions (tagged switch, etc.)
+      # Keep SA (correctness) and ST (style) bug-level checks enabled.
+      checks:
+        - all
+        - -QF1003
+  exclusions:
+    rules:
+      - path: _test\.go$
+        linters:
+          - errcheck
+      - path: corrosiontest/
+        linters:
+          - errcheck

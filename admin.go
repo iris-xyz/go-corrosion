@@ -38,14 +38,14 @@ func (c *AdminClient) SendCommand(cmd []byte) (<-chan Response, error) {
 	}
 
 	if _, err = conn.Write(encodeFrame(cmd)); err != nil {
-		conn.Close()
+		conn.Close() //nolint:errcheck
 		return nil, fmt.Errorf("send command: %w", err)
 	}
 
 	ch := make(chan Response)
 	go func() {
 		defer close(ch)
-		defer conn.Close()
+		defer conn.Close() //nolint:errcheck
 
 		for {
 			r := Response{}

@@ -43,7 +43,7 @@ type serverErrorBody struct {
 // newServerError constructs a [*ServerError] from an HTTP response. The caller must not use
 // resp.Body after this call; it is fully consumed and closed.
 func newServerError(resp *http.Response) *ServerError {
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 	se := &ServerError{StatusCode: resp.StatusCode}
 
 	// Parse Retry-After header.

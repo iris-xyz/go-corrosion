@@ -76,7 +76,7 @@ func (c *APIClient) ExecMultiContext(ctx context.Context, statements ...Statemen
 		}
 		return nil, fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var execResp ExecResponse
 	if resp.StatusCode == http.StatusOK {
@@ -388,7 +388,7 @@ func (r *Row) Scan(dest ...any) error {
 	if r.err != nil {
 		return r.err
 	}
-	defer r.rows.Close()
+	defer r.rows.Close() //nolint:errcheck
 
 	if !r.rows.Next() {
 		if err := r.rows.Err(); err != nil {
