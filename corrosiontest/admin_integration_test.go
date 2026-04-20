@@ -4,9 +4,7 @@ package corrosiontest_test
 
 import (
 	"context"
-	"os"
 	"testing"
-	"time"
 
 	"github.com/iris-xyz/go-corrosion"
 	"github.com/iris-xyz/go-corrosion/corrosiontest"
@@ -22,27 +20,11 @@ import (
 func TestAdminClient_ClusterMembershipStates(t *testing.T) {
 	ctx := context.Background()
 
-	sockDir := t.TempDir()
-
-	agent, err := corrosiontest.StartAgent(ctx, corrosiontest.WithAdminSocketBind(sockDir))
+	agent, err := corrosiontest.StartAgent(ctx, corrosiontest.WithAdminSocketBind(t.TempDir()))
 	if err != nil {
 		t.Fatalf("StartAgent: %v", err)
 	}
 	t.Cleanup(func() { agent.Stop(context.Background()) })
-
-	// The agent's HTTP port is ready before the admin socket is necessarily bound;
-	// wait for the socket to appear on the host (bind-mount propagation).
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		if _, statErr := os.Stat(agent.AdminSocket()); statErr == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			entries, _ := os.ReadDir(sockDir)
-			t.Fatalf("admin socket %q never appeared; dir contents: %v", agent.AdminSocket(), entries)
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
 
 	admin, err := corrosion.NewAdminClient(agent.AdminSocket())
 	if err != nil {

@@ -194,6 +194,13 @@ func StartAgent(ctx context.Context, opts ...Option) (*Agent, error) {
 	adminSock := ""
 	if cfg.adminSocketDir != "" {
 		adminSock = filepath.Join(cfg.adminSocketDir, "admin.sock")
+		// Corrosion creates admin.sock shortly after startup (after the API port opens),
+		// and as root inside the container with mode 0755 — non-root hosts (CI runners)
+		// need write permission to connect. Wait for the socket to appear, then chmod it.
+		if err := prepareAdminSocket(ctx, container); err != nil {
+			_ = container.Terminate(ctx)
+			return nil, fmt.Errorf("prepare admin socket: %w", err)
+		}
 	}
 
 	return &Agent{
@@ -201,4 +208,29 @@ func StartAgent(ctx context.Context, opts ...Option) (*Agent, error) {
 		baseURL:   baseURL,
 		adminSock: adminSock,
 	}, nil
+}
+
+// prepareAdminSocket waits for /var/run/corrosion/admin.sock to exist inside the
+// container and relaxes its permissions so a non-root host user can dial it.
+func prepareAdminSocket(ctx context.Context, c testcontainers.Container) error {
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		code, _, err := c.Exec(ctx, []string{"test", "-S", "/var/run/corrosion/admin.sock"})
+		if err == nil && code == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("admin socket did not appear within 10s")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	code, reader, err := c.Exec(ctx, []string{"chmod", "0666", "/var/run/corrosion/admin.sock"})
+	if err != nil {
+		return fmt.Errorf("chmod admin socket: %w", err)
+	}
+	if code != 0 {
+		out, _ := io.ReadAll(reader)
+		return fmt.Errorf("chmod admin socket exit %d: %s", code, string(out))
+	}
+	return nil
 }
