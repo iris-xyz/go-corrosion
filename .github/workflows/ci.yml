@@ -35,7 +35,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: go mod download
-      - run: go test -tags corrosion_integration -race -count=1 -timeout=10m ./corrosiontest/...
+      - run: go test -tags "corrosion_integration corrosion_admin_integration" -race -count=1 -timeout=10m ./corrosiontest/...
 
   staticcheck:
     runs-on: ubuntu-latest
