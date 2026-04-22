@@ -335,11 +335,14 @@ func (rs *Rows) Scan(dest ...any) error {
 	if len(dest) != len(rs.columns) {
 		return fmt.Errorf("expected %d values, got %d", len(rs.columns), len(dest))
 	}
+	return scanValues(rs.row.Values, dest)
+}
 
-	for i, v := range rs.row.Values {
+// scanValues unmarshals JSON column values into dest. It handles [sql.Scanner]
+// implementors by first decoding to a native Go type, then forwarding to Scan.
+func scanValues(values []json.RawMessage, dest []any) error {
+	for i, v := range values {
 		if scanner, ok := dest[i].(sql.Scanner); ok {
-			// Decode the JSON value to its native Go type first, then forward
-			// to the Scanner so that sql.NullString, sql.NullInt64, etc. work correctly.
 			var raw any
 			if err := json.Unmarshal(v, &raw); err != nil {
 				return fmt.Errorf("unmarshal column value #%d: %w", i, err)

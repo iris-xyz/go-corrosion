@@ -3,7 +3,6 @@ package corrosion
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -82,25 +81,7 @@ func (ce *ChangeEvent) Scan(dest ...any) error {
 	if len(dest) != len(ce.Values) {
 		return fmt.Errorf("expected %d values, got %d", len(ce.Values), len(dest))
 	}
-
-	for i, v := range ce.Values {
-		if scanner, ok := dest[i].(sql.Scanner); ok {
-			// Decode the JSON value to its native Go type first, then forward
-			// to the Scanner so that sql.NullString, sql.NullInt64, etc. work correctly.
-			var raw any
-			if err := json.Unmarshal(v, &raw); err != nil {
-				return fmt.Errorf("unmarshal column value #%d: %w", i, err)
-			}
-			if err := scanner.Scan(raw); err != nil {
-				return fmt.Errorf("scan column value #%d: %w", i, err)
-			}
-			continue
-		}
-		if err := json.Unmarshal(v, dest[i]); err != nil {
-			return fmt.Errorf("unmarshal column value #%d: %w", i, err)
-		}
-	}
-	return nil
+	return scanValues(ce.Values, dest)
 }
 
 // Subscription receives updates from the Corrosion database for a desired SQL query.
