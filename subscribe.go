@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"sync"
 	"sync/atomic"
 
 	"github.com/cenkalti/backoff/v4"
@@ -21,7 +22,7 @@ import (
 type ChangeType string
 
 // Change event kinds emitted by Corrosion subscriptions.
-var (
+const (
 	ChangeTypeInsert ChangeType = "insert"
 	ChangeTypeUpdate ChangeType = "update"
 	ChangeTypeDelete ChangeType = "delete"
@@ -117,6 +118,7 @@ type Subscription struct {
 	// lastChangeID is the highest change_id observed. Seeded from the snapshot eoq
 	// (skip_rows=false) and advanced by each change event.
 	lastChangeID atomic.Uint64
+	errMu        sync.Mutex
 	err          error
 	logger       *slog.Logger
 
@@ -247,13 +249,13 @@ func (s *Subscription) handleChangeEvents() {
 			// Fatal stream errors must not trigger resubscription — the subscription is dead.
 			var se *StreamError
 			if errors.As(err, &se) && se.Fatal {
-				s.err = err
+				s.setErr(err)
 				return
 			}
 
 			// Report the error if resubscribing is disabled.
 			if s.resubscribe == nil {
-				s.err = err
+				s.setErr(err)
 				return
 			}
 
@@ -263,7 +265,7 @@ func (s *Subscription) handleChangeEvents() {
 			sub, sErr := s.resubscribe(s.ctx, from)
 			if sErr != nil {
 				// resubscribe returns a permanent error after unsuccessful retries.
-				s.err = fmt.Errorf("resubscribe to query with backoff: %w", sErr)
+				s.setErr(fmt.Errorf("resubscribe to query with backoff: %w", sErr))
 				return
 			}
 			// On POST fallback the server issues a new ID; reset it and lastChangeID
@@ -286,8 +288,17 @@ func (s *Subscription) handleChangeEvents() {
 
 // Err returns the error, if any, that was encountered during fetching changes.
 // Err may be called after an explicit or implicit [Subscription.Close].
+// It is safe to call concurrently with [Subscription.Changes].
 func (s *Subscription) Err() error {
+	s.errMu.Lock()
+	defer s.errMu.Unlock()
 	return s.err
+}
+
+func (s *Subscription) setErr(err error) {
+	s.errMu.Lock()
+	s.err = err
+	s.errMu.Unlock()
 }
 
 // Close terminates the subscription, cancels any in-flight resubscribe, and

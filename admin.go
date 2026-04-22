@@ -11,7 +11,13 @@ import (
 	"time"
 )
 
-const adminSocketTimeout = 10 * time.Second
+const (
+	adminSocketTimeout = 10 * time.Second
+	// maxFrameSize is the upper bound on a single Tokio length-delimited
+	// frame read from the admin socket. It prevents a malformed or malicious
+	// length prefix from causing an unbounded allocation.
+	maxFrameSize = 1 << 20 // 1 MiB
+)
 
 // AdminClient is a client for the Corrosion admin API.
 type AdminClient struct {
@@ -102,8 +108,8 @@ func encodeFrame(data []byte) []byte {
 	return encoded
 }
 
-// readFrame reads a length_delimited Tokio frame from the connection by extracting the frame data that follows
-// the frame head.
+// readFrame reads a length-delimited Tokio frame from conn. It rejects
+// frames larger than [maxFrameSize] to guard against unbounded allocation.
 func readFrame(conn net.Conn) ([]byte, error) {
 	// Read the frame head (4 bytes).
 	head := make([]byte, 4)
@@ -112,6 +118,9 @@ func readFrame(conn net.Conn) ([]byte, error) {
 	}
 	// Read the frame data (length specified in the frame head).
 	length := binary.BigEndian.Uint32(head)
+	if length > maxFrameSize {
+		return nil, fmt.Errorf("frame size %d exceeds maximum %d", length, maxFrameSize)
+	}
 	data := make([]byte, length)
 	if _, err := io.ReadFull(conn, data); err != nil {
 		return nil, fmt.Errorf("read frame data: %w", err)
