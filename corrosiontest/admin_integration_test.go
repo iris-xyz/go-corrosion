@@ -26,10 +26,7 @@ func TestAdminClient_ClusterMembershipStates(t *testing.T) {
 	}
 	t.Cleanup(func() { agent.Stop(context.Background()) })
 
-	admin, err := corrosion.NewAdminClient(agent.AdminSocket())
-	if err != nil {
-		t.Fatalf("NewAdminClient: %v", err)
-	}
+	admin := corrosion.NewAdminClient(agent.AdminSocket())
 
 	states, err := admin.ClusterMembershipStates(true)
 	if err != nil {

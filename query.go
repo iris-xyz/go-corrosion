@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 )
 
@@ -32,6 +31,17 @@ type ExecResult struct {
 	RowsAffected uint    `json:"rows_affected"`
 	Time         float64 `json:"time"`
 	Error        *string `json:"error"`
+}
+
+// stmtErrors joins per-statement errors from the transaction results.
+func (r *ExecResponse) stmtErrors() error {
+	var errs []error
+	for _, result := range r.Results {
+		if result.Error != nil {
+			errs = append(errs, errors.New(*result.Error))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // ExecContext writes changes to the Corrosion database for propagation through the cluster. The args are for any
@@ -70,11 +80,7 @@ func (c *APIClient) ExecMultiContext(ctx context.Context, statements ...Statemen
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		var opErr *net.OpError
-		if errors.As(err, &opErr) {
-			return nil, newTransientError(err)
-		}
-		return nil, fmt.Errorf("send request: %w", err)
+		return nil, wrapDoError(err)
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
@@ -83,13 +89,7 @@ func (c *APIClient) ExecMultiContext(ctx context.Context, statements ...Statemen
 		if err = json.NewDecoder(resp.Body).Decode(&execResp); err != nil {
 			return nil, newProtocolError("decode exec response", err)
 		}
-		var errs []error
-		for _, result := range execResp.Results {
-			if result.Error != nil {
-				errs = append(errs, errors.New(*result.Error))
-			}
-		}
-		return &execResp, errors.Join(errs...)
+		return &execResp, execResp.stmtErrors()
 	} else if resp.StatusCode == http.StatusInternalServerError {
 		// Corrosion returns 500 when at least one statement in the transaction failed.
 		// The body carries the same ExecResponse shape as the 200 OK path, so decode it
@@ -106,20 +106,14 @@ func (c *APIClient) ExecMultiContext(ctx context.Context, statements ...Statemen
 				Body:       io.NopCloser(bytes.NewReader(respBody)),
 			})
 		}
-		var errs []error
-		for _, result := range execResp.Results {
-			if result.Error != nil {
-				errs = append(errs, errors.New(*result.Error))
-			}
+		if stmtErr := execResp.stmtErrors(); stmtErr != nil {
+			return &execResp, stmtErr
 		}
-		if len(errs) == 0 {
-			return nil, newServerError(&http.Response{
-				StatusCode: http.StatusInternalServerError,
-				Header:     resp.Header,
-				Body:       io.NopCloser(bytes.NewReader(respBody)),
-			})
-		}
-		return &execResp, errors.Join(errs...)
+		return nil, newServerError(&http.Response{
+			StatusCode: http.StatusInternalServerError,
+			Header:     resp.Header,
+			Body:       io.NopCloser(bytes.NewReader(respBody)),
+		})
 	}
 
 	return nil, newServerError(resp)
@@ -192,11 +186,7 @@ func (c *APIClient) QueryContext(ctx context.Context, query string, args ...any)
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		var opErr *net.OpError
-		if errors.As(err, &opErr) {
-			return nil, newTransientError(err)
-		}
-		return nil, fmt.Errorf("send request: %w", err)
+		return nil, wrapDoError(err)
 	}
 
 	if resp.StatusCode != http.StatusOK {

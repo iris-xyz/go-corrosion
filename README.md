@@ -8,7 +8,7 @@ Supports:
 - Parameterised queries over HTTP (`QueryContext`, `QueryRowContext`)
 - Transactional writes (`ExecContext`, `ExecMultiContext`)
 - Live subscriptions with `change_id` resume (`SubscribeContext`, `ResubscribeContext`)
-- Bearer-token auth, custom `*http.Client`, structured logger injection
+- Bearer-token auth, custom `http.RoundTripper`, structured logger injection
 - NDJSON streaming with cancellation-aware read deadlines
 
 ## Install
@@ -63,12 +63,15 @@ if err != nil {
 }
 defer sub.Close()
 
-for ev := range sub.Changes() {
-    if ev.Err != nil {
-        log.Printf("subscription error: %v", ev.Err)
-        break
-    }
-    log.Printf("change: %+v", ev.Change)
+changes, err := sub.Changes()
+if err != nil {
+    log.Fatal(err)
+}
+for ev := range changes {
+    log.Printf("change: type=%s row=%d", ev.Type, ev.RowID)
+}
+if err := sub.Err(); err != nil {
+    log.Fatal(err)
 }
 ```
 
@@ -84,7 +87,7 @@ sub2, err := c.ResubscribeContext(ctx, sub.ID(), sub.LastChangeID())
 ```go
 c, err := corrosion.NewAPIClient(addr,
     corrosion.WithBearerToken(token),
-    corrosion.WithHTTPClient(customHTTPClient),
+    corrosion.WithTransport(customTransport),
     corrosion.WithLogger(myLogger),
 )
 ```

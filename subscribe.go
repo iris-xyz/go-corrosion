@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -330,11 +329,7 @@ func (c *APIClient) postSubscription(ctx context.Context, query string, args []a
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		var opErr *net.OpError
-		if errors.As(err, &opErr) {
-			return nil, newTransientError(err)
-		}
-		return nil, fmt.Errorf("send request: %w", err)
+		return nil, wrapDoError(err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -432,11 +427,7 @@ func (c *APIClient) ResubscribeContext(ctx context.Context, id string, fromChang
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		var opErr *net.OpError
-		if errors.As(err, &opErr) {
-			return nil, newTransientError(err)
-		}
-		return nil, fmt.Errorf("send request: %w", err)
+		return nil, wrapDoError(err)
 	}
 
 	if resp.StatusCode != http.StatusOK {

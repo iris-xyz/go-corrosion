@@ -2,8 +2,10 @@ package corrosion
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -40,6 +42,17 @@ func (c *cancelableReadCloser) Read(p []byte) (int, error) { return c.rc.Read(p)
 func (c *cancelableReadCloser) Close() error {
 	c.once.Do(func() { close(c.done) })
 	return c.rc.Close()
+}
+
+// wrapDoError classifies an error returned by [http.Client.Do]. Network-level
+// failures ([*net.OpError]) are wrapped as [*TransientError]; all others are
+// returned as a generic send-request error.
+func wrapDoError(err error) error {
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return newTransientError(err)
+	}
+	return fmt.Errorf("send request: %w", err)
 }
 
 // newJSONRequest builds an HTTP request pointed at u with JSON content

@@ -24,8 +24,8 @@ type AdminClient struct {
 	sockPath string
 }
 
-func NewAdminClient(sockPath string) (*AdminClient, error) {
-	return &AdminClient{sockPath: sockPath}, nil
+func NewAdminClient(sockPath string) *AdminClient {
+	return &AdminClient{sockPath: sockPath}
 }
 
 type Response struct {
@@ -75,7 +75,6 @@ func (c *AdminClient) SendCommand(cmd []byte) (<-chan Response, error) {
 				if v == "Success" {
 					return
 				}
-				// Ignore other strings.
 			case map[string]any:
 				if errData, ok := v["Error"].(map[string]any); ok {
 					if errMsg, ok := errData["msg"].(string); ok {
@@ -89,9 +88,10 @@ func (c *AdminClient) SendCommand(cmd []byte) (<-chan Response, error) {
 					r.JSON = jsonData
 					ch <- r
 				}
-				// Ignore other maps.
 			default:
-				// Ignore other types.
+				r.Err = fmt.Errorf("unexpected admin response type %T: %v", decoded, decoded)
+				ch <- r
+				return
 			}
 		}
 	}()
