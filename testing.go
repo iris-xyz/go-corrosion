@@ -2,6 +2,7 @@ package corrosion
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 )
 
@@ -26,5 +27,23 @@ func NewSubscriptionForTesting(ctx context.Context, id string, changes chan *Cha
 		id:      id,
 		changes: changes,
 		body:    nopCloser{},
+	}
+}
+
+// NewChangeEventForTesting builds a [*ChangeEvent] for unit tests. Values are
+// JSON-encoded for you; pass them in the same column order as the subscription
+// would emit. Same caveats as [NewSubscriptionForTesting] — test-only entry
+// point, shape may change.
+func NewChangeEventForTesting(changeType ChangeType, rowID, changeID uint64, values ...any) *ChangeEvent {
+	raw := make([]json.RawMessage, len(values))
+	for i, v := range values {
+		data, _ := json.Marshal(v)
+		raw[i] = data
+	}
+	return &ChangeEvent{
+		Type:     changeType,
+		RowID:    rowID,
+		ChangeID: changeID,
+		Values:   raw,
 	}
 }

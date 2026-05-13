@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"golang.org/x/net/http2"
 )
 
@@ -69,6 +70,9 @@ type APIClient struct {
 	// transport holds a caller-supplied base RoundTripper (via WithTransport).
 	// When non-nil it replaces the default http2.Transport inside the retry wrapper.
 	transport http.RoundTripper
+
+	tracingEnabled bool
+	tracingOpts    []otelhttp.Option
 }
 
 // NewAPIClient creates a new Corrosion API client.
@@ -110,6 +114,10 @@ func NewAPIClient(addr string, opts ...APIClientOption) (*APIClient, error) {
 				return dialer.DialContext(ctx, network, addr)
 			},
 		}
+	}
+	if c.tracingEnabled {
+		// otelhttp wraps the base INSIDE retry so each attempt is its own span.
+		base = otelhttp.NewTransport(base, c.tracingOpts...)
 	}
 	c.client = &http.Client{Transport: &retryRoundTripper{
 		base:       base,
