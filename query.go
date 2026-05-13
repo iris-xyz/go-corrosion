@@ -356,6 +356,16 @@ func (rs *Rows) Scan(dest ...any) error {
 	return nil
 }
 
+// AsChangeEvent converts the current row into a synthetic insert [ChangeEvent].
+// Must be called after a successful [Rows.Next].
+func (rs *Rows) AsChangeEvent() *ChangeEvent {
+	return &ChangeEvent{
+		Type:   ChangeTypeInsert,
+		RowID:  rs.row.RowID,
+		Values: rs.row.Values,
+	}
+}
+
 // Time returns the time taken to execute the query in seconds. It's only available after all rows have been consumed.
 // It doesn't include the time to send the query, receive the response, or iterate over the rows.
 func (rs *Rows) Time() (float64, error) {
